@@ -1,0 +1,57 @@
+# ===========================
+# GLOBAL / OS FILES
+# ===========================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ===========================
+# INFRASTRUCTURE (Terraform)
+# ===========================
+# Local .terraform directories
+**/.terraform/*
+
+# .tfstate files (Contains sensitive infrastructure data)
+*.tfstate
+*.tfstate.*
+
+# Crash log files
+crash.log
+
+# Exclude all .tfvars files (Contains passwords/secrets)
+*.tfvars
+*.tfvars.json
+
+# SSH Keys (CRITICAL SECURITY)
+*.pem
+*.pub
+# Specifically ignore the keys inside your module folders
+humangov-infrastructure/modules/application/*.pub
+
+# ===========================
+# APPLICATION (Python/Flask)
+# ===========================
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environments (Never commit these, they are huge)
+venv/
+env/
+.venv/
+
+# Environment Variables (Secrets like DB passwords)
+.env
+.flaskenv
+
+# Distribution / Packaging
+dist/
+build/
+*.egg-info/
+
+# Logs
+*.log
+
+humangov10-ec2-key
