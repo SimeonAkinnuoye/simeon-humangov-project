@@ -2,8 +2,8 @@ module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 20.0"
 
-  cluster_name    = "humangov-cluster" # Matches your CLI command
-  cluster_version = "1.29"             # Current stable version
+  cluster_name    = "humangov-cluster" 
+  cluster_version = "1.29"             
 
   # Networking
   vpc_id                   = var.vpc_id
