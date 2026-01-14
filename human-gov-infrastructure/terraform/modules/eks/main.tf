@@ -1,3 +1,4 @@
+
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 20.0"
@@ -31,5 +32,23 @@ module "eks" {
   tags = {
     Environment = "dev"
     Project     = "humangov"
+  }
+}
+
+module "lb_role" {
+  source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
+  version = "5.0"
+
+  role_name = "humangov-eks-lb-role"
+
+  attach_load_balancer_controller_policy = true
+  oidc_providers = {
+    main = {
+      provider_arn               = module.eks.oidc_provider_arn
+      namespace_service_accounts = ["kube-system:aws-load-balancer-controller"]
+    }
+  }
+  tags = {
+    Project     = "humangov-eks-lb-role"
   }
 }

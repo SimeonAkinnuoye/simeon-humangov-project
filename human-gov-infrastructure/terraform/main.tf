@@ -1,3 +1,21 @@
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = "~> 2.24.0"
+    }
+    helm = {
+      source  = "hashicorp/helm"
+      version = "~> 2.12.0"
+    }
+  }
+}
+
 provider "aws" {
   region = "us-east-1"
 }
@@ -7,9 +25,9 @@ module "network" {
 }
 
 module "eks" {
-  source = "./modules/eks"
-  vpc_id = module.network.vpc_id
-  subnet_ids = module.network.public_subnets
+  source     = "./modules/eks"
+  vpc_id     = module.network.vpc_id
+  subnet_ids = module.network.private_subnets
 }
 
 module "aws_human_gov_infrastructure" {
@@ -17,5 +35,75 @@ module "aws_human_gov_infrastructure" {
   for_each   = toset(var.states)
   state_name = each.value
   vpc_id     = module.network.vpc_id
-  subnet_id  = module.network.public_subnets[0]
+  subnet_id  = try(module.network.public_subnets[0], null)
+}
+# ✅ FIX: Only fetch cluster data if it exists
+data "aws_eks_cluster" "cluster" {
+  count      = try(module.eks.cluster_name, null) != null ? 1 : 0
+  name       = module.eks.cluster_name
+  depends_on = [module.eks]
+}
+data "aws_eks_cluster_auth" "cluster_auth" {
+  count      = try(module.eks.cluster_name, null) != null ? 1 : 0
+  name       = module.eks.cluster_name
+  depends_on = [module.eks]
+}
+
+provider "kubernetes" {
+  host                   = try(data.aws_eks_cluster.cluster[0].endpoint, "")
+  cluster_ca_certificate = try(base64decode(data.aws_eks_cluster.cluster[0].certificate_authority[0].data), "")
+  token                  = try(data.aws_eks_cluster_auth.cluster_auth[0].token, "")
+}
+
+provider "helm" {
+  kubernetes {
+    host                   = try(data.aws_eks_cluster.cluster[0].endpoint, "")
+    cluster_ca_certificate = try(base64decode(data.aws_eks_cluster.cluster[0].certificate_authority[0].data), "")
+    token                  = try(data.aws_eks_cluster_auth.cluster_auth[0].token, "")
+  }
+}
+
+#  Only create helm release if cluster exists
+resource "helm_release" "lb_controller" {
+  count      = try(module.eks.cluster_name, null) != null ? 1 : 0
+  
+  name       = "aws-load-balancer-controller"
+  repository = "https://aws.github.io/eks-charts"
+  chart      = "aws-load-balancer-controller"
+  namespace  = "kube-system"
+  version    = "1.6.2"
+  timeout    = 600
+  wait       = true
+  wait_for_jobs = true
+  depends_on = [module.eks]
+  
+   set {
+    name  = "clusterName"
+    value = module.eks.cluster_name
+  }
+  
+  set {
+    name  = "serviceAccount.create"
+    value = "true"
+  }
+  
+  set {
+    name  = "serviceAccount.name"
+    value = "aws-load-balancer-controller"
+  }
+  
+  set {
+    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+    value = module.eks.lb_role_arn
+  }
+  
+  set {
+    name  = "region"
+    value = "us-east-1"
+  }
+  
+  set {
+    name  = "vpcId"
+    value = module.network.vpc_id
+  }
 }

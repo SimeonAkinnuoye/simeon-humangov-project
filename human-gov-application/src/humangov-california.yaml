@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+Metadata:
+    name: humangov-python-app-california
+    spec:
+      replicas: 1
+    selector:
+      matchLabels:
+        app: humangov-python-app-california
+        template:
+          metadata:
+            labels:
+              app: humangov-python-app-california
+              spec:
+                serviceAccountName: XXXXXXXX-python-app-california
+                containers:
+                - name: humangov-python-app-california
+                  image: humangov-app:latest
+                  ports:
+                  - containerPort: 
