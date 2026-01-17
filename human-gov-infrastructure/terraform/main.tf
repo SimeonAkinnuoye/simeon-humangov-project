@@ -39,69 +39,66 @@ module "aws_human_gov_infrastructure" {
 }
 # ✅ FIX: Only fetch cluster data if it exists
 data "aws_eks_cluster" "cluster" {
-  count      = try(module.eks.cluster_name, null) != null ? 1 : 0
   name       = module.eks.cluster_name
   depends_on = [module.eks]
 }
 data "aws_eks_cluster_auth" "cluster_auth" {
-  count      = try(module.eks.cluster_name, null) != null ? 1 : 0
   name       = module.eks.cluster_name
   depends_on = [module.eks]
 }
 
 provider "kubernetes" {
-  host                   = try(data.aws_eks_cluster.cluster[0].endpoint, "")
-  cluster_ca_certificate = try(base64decode(data.aws_eks_cluster.cluster[0].certificate_authority[0].data), "")
-  token                  = try(data.aws_eks_cluster_auth.cluster_auth[0].token, "")
+  host                   = data.aws_eks_cluster.cluster[0].endpoint
+  cluster_ca_certificate = base64decode(data.aws_eks_cluster.cluster[0].certificate_authority[0].data)
+  token                  = data.aws_eks_cluster_auth.cluster_auth[0].token
 }
 
 provider "helm" {
   kubernetes {
-    host                   = try(data.aws_eks_cluster.cluster[0].endpoint, "")
-    cluster_ca_certificate = try(base64decode(data.aws_eks_cluster.cluster[0].certificate_authority[0].data), "")
-    token                  = try(data.aws_eks_cluster_auth.cluster_auth[0].token, "")
+    host                   = data.aws_eks_cluster.cluster.endpoint
+    cluster_ca_certificate = base64decode(data.aws_eks_cluster.cluster.certificate_authority[0].data)
+    token                  = data.aws_eks_cluster_auth.cluster_auth.token
   }
 }
 
 #  Only create helm release if cluster exists
 resource "helm_release" "lb_controller" {
-  count      = try(module.eks.cluster_name, null) != null ? 1 : 0
-  
-  name       = "aws-load-balancer-controller"
-  repository = "https://aws.github.io/eks-charts"
-  chart      = "aws-load-balancer-controller"
-  namespace  = "kube-system"
-  version    = "1.6.2"
-  timeout    = 600
-  wait       = true
+
+  name          = "aws-load-balancer-controller"
+  repository    = "https://aws.github.io/eks-charts"
+  chart         = "aws-load-balancer-controller"
+  namespace     = "kube-system"
+  version       = "1.6.2"
+  timeout       = 600
+  wait          = true
   wait_for_jobs = true
-  depends_on = [module.eks]
-  
-   set {
+  depends_on    = [module.eks]
+
+  set {
     name  = "clusterName"
     value = module.eks.cluster_name
   }
-  
+
   set {
     name  = "serviceAccount.create"
     value = "true"
   }
-  
+
   set {
     name  = "serviceAccount.name"
     value = "aws-load-balancer-controller"
   }
-  
+
   set {
     name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
     value = module.eks.lb_role_arn
   }
-  
+
   set {
     name  = "region"
     value = "us-east-1"
   }
-  
+
   set {
     name  = "vpcId"
     value = module.network.vpc_id

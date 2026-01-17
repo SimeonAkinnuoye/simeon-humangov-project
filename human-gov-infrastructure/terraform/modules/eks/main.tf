@@ -35,20 +35,67 @@ module "eks" {
   }
 }
 
+# 1. Fetch the LATEST official policy from AWS GitHub
+data "http" "lb_controller_iam_policy" {
+  url = "https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/main/docs/install/iam_policy.json"
+}
+
+# 2. Create the IAM Policy resource using that JSON
+resource "aws_iam_policy" "lb_controller_policy" {
+  name        = "AWSLoadBalancerControllerIAMPolicy_HumanGov"
+  path        = "/"
+  description = "Official AWS Load Balancer Controller IAM Policy"
+  policy      = data.http.lb_controller_iam_policy.response_body
+}
+
+# 3. Create the Role and attach OUR policy (Disable the default one)
 module "lb_role" {
-  source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
-  version = "5.0"
+  source    = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
+  version   = "~> 5.0"
 
   role_name = "humangov-eks-lb-role"
 
-  attach_load_balancer_controller_policy = true
+  # CRITICAL: Turn OFF the default policy (It was missing permissions)
+  attach_load_balancer_controller_policy = false
+
+  # CRITICAL: Attach OUR fresh official policy
+  role_policy_arns = {
+    additional = aws_iam_policy.lb_controller_policy.arn
+  }
+
   oidc_providers = {
     main = {
       provider_arn               = module.eks.oidc_provider_arn
       namespace_service_accounts = ["kube-system:aws-load-balancer-controller"]
     }
   }
+
   tags = {
-    Project     = "humangov-eks-lb-role"
+    Name = "humangov-eks-lb-role"
   }
+}
+
+
+module "irsa_humangov_app" {
+  source = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
+  version = "5.30"
+  role_name = "humangov-pod-execution-role"
+
+  oidc_providers = {
+    main = {
+      provider_arn = module.eks.oidc_provider_arn
+      namespace_service_accounts = ["default:humangov-pod-execution-role"]
+    }
+  }
+
+# Attach permissions
+  role_policy_arns = {
+    AmazonS3FullAccess       = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+    AmazonDynamoDBFullAccess = "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
+  }
+
+  tags = {
+    Name = "humangov-pod-execution-role"
+  }
+
 }
