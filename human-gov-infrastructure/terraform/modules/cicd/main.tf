@@ -13,7 +13,7 @@ resource "aws_iam_role" "codebuild_role" {
   })
 }
 
-# 2. Permissions (ECR, EKS, Logging)
+# 2. Permissions (ECR, EKS, Logs, AND NOW S3)
 resource "aws_iam_role_policy" "codebuild_policy" {
   role = aws_iam_role.codebuild_role.name
 
@@ -47,11 +47,23 @@ resource "aws_iam_role_policy" "codebuild_policy" {
         Effect = "Allow"
         Action = ["eks:DescribeCluster"]
         Resource = "*"
+      },
+      # --- NEW: S3 Permissions to download artifacts ---
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:GetObjectVersion",
+          "s3:GetBucketVersioning"
+        ]
+        Resource = [
+          aws_s3_bucket.codepipeline_bucket.arn,
+          "${aws_s3_bucket.codepipeline_bucket.arn}/*"
+        ]
       }
     ]
   })
 }
-
 # 3. Artifact Bucket (Stores the pipeline temporary files)
 resource "aws_s3_bucket" "codepipeline_bucket" {
   bucket_prefix = "humangov-codepipeline-"
@@ -166,7 +178,7 @@ resource "aws_codepipeline" "humangov_pipeline" {
 
       configuration = {
         ConnectionArn    = var.codestar_connection_arn
-        FullRepositoryId = "YOUR_GITHUB_USERNAME/humangov-terraform" # ⚠️ REPLACE THIS IN ROOT
+        FullRepositoryId = "SimeonAkinnuoye/simeon-humangov-project" # ⚠️ REPLACE THIS IN ROOT
         BranchName       = "main"
       }
     }

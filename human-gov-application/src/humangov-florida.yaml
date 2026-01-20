@@ -26,12 +26,12 @@ spec:
       serviceAccountName: humangov-pod-execution-role
       containers:
       - name: humangov-python-app-florida 
-        image: public.ecr.aws/d7r6q9j6/humangov-app:latest 
+        image: IMAGE_PLACEHOLDER 
         ports:
         - containerPort: 8000
         env:
         - name: AWS_BUCKET
-          value: "humangov-florida-s3-grwo"  
+          value: "humangov-florida-s3-5ynm"  
         - name: AWS_DYNAMODB_TABLE
           value: "humangov-florida-dynamodb"  
         - name: AWS_REGION
