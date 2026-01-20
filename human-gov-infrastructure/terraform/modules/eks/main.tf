@@ -1,3 +1,4 @@
+data "aws_caller_identity" "current" {}
 
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
@@ -14,9 +15,25 @@ module "eks" {
   # Security: Allow you to access it from the internet (public endpoint)
   cluster_endpoint_public_access = true
 
+
   # Grant Admin permissions to the user running Terraform
   enable_cluster_creator_admin_permissions = true
 
+   access_entries = {
+    ci_cd_pipeline = {
+      # Constructs ARN using the Account ID data source
+      principal_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/humangov-codebuild-role"
+
+      policy_associations = {
+        admin = {
+          policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+          access_scope = { type = "cluster" }
+        }
+      }
+    }
+  }
+
+ 
   # Node Groups (The "t3.medium" workers)
   eks_managed_node_groups = {
     standard_workers = {           # Matches your --nodegroup-name
@@ -99,3 +116,4 @@ module "irsa_humangov_app" {
   }
 
 }
+

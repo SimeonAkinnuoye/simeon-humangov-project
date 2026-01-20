@@ -104,3 +104,23 @@ resource "helm_release" "lb_controller" {
     value = module.network.vpc_id
   }
 }
+
+# Create the ECR Repository
+resource "aws_ecr_repository" "humangov_app_repo" {
+  name                 = "humangov-app"
+  image_tag_mutability = "MUTABLE"
+  force_delete         = true
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+}
+
+ module "cicd" {
+  source = "./modules/cicd"
+
+  region                  = "us-east-1"
+  cluster_name            = module.eks.cluster_name
+  ecr_repo_url            = aws_ecr_repository.humangov_app_repo.repository_url
+  codestar_connection_arn = "arn:aws:codeconnections:us-east-1:211125586061:connection/87aab261-3f86-4b0d-937d-85240f12d358"
+} 

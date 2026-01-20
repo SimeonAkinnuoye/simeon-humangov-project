@@ -8,3 +8,7 @@ output "state_infrastructure_outputs" {
     }
   }
 }
+
+ output "codebuild_role_arn" {
+  value = module.cicd.codebuild_role_arn
+} 
