@@ -151,7 +151,7 @@ resource "aws_codebuild_project" "humangov_build" {
 
   source {
     type      = "CODEPIPELINE"
-    buildspec = "human-gov-application/src/buildspec.yml"
+    buildspec = "buildspec.yml"  # <--- SIMPLE AND CLEAN
   }
 }
 
