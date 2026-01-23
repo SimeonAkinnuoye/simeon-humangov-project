@@ -9,11 +9,73 @@ This project demonstrates the architecture and deployment of the HumanGov platfo
 The solution emphasizes **security, scalability, and automation**, moving away from manual "ClickOps" to a fully automated Infrastructure-as-Code (IaC) and Continuous Delivery workflow.
 
 ---
+Key Architectural Components
+Network Layer:
+A custom VPC (Virtual Private Cloud) with Public and Private Subnets across multiple Availability Zones for high availability.
+NAT Gateway configuration to allow secure internet access for private resources.
+Compute Layer (EKS):
+Amazon EKS Cluster (Control Plane) managing the container orchestration.
+Managed Node Groups (EC2 t3.medium) running the application workloads.
+Traffic Management:
+AWS Load Balancer Controller installed via Helm.
+Application Load Balancer (ALB) provisioned automatically via Kubernetes Ingress to route traffic based on host headers (e.g., california.humangovv.click).
+Route 53 for DNS management.
+Storage & State:
+DynamoDB tables for application state management (per tenant).
+S3 Buckets for file storage (per tenant).
+CI/CD:
+AWS CodePipeline linked to GitHub.
+AWS CodeBuild for building Docker images and executing Kubernetes deployments.
+Amazon ECR for storing container images.
 
-      Architecture Design
 
-The architecture follows the **AWS Well-Architected Framework**, prioritizing security and operational excellence.
+Technologies Used
+Infrastructure as Code: Terraform (Modules, State Locking with DynamoDB, Remote State in S3).
+Containerization: Docker, Dockerfile.
+Orchestration: Kubernetes (EKS), Helm, Kubectl.
+Identity & Security: AWS IAM Roles for Service Accounts (IRSA), OIDC Provider.
+Automation: AWS CodePipeline, AWS CodeBuild.
+Application: Python (Flask), Gunicorn, Nginx.
 
+
+Phase 1: Infrastructure Provisioning (Terraform)
+I utilized a modular Terraform approach to maintain clean code and separation of concerns.
+1. Remote State Management:
+Configured an S3 bucket for storing the Terraform state file and a DynamoDB table for state locking to prevent concurrent modification errors.
+2. Networking & EKS:
+Provisioned the VPC and EKS cluster. I used a layered deployment strategy (-target) to ensure the network foundation was solid before deploying the cluster.
+
+3. Application Resources:
+Automated the creation of S3 buckets and DynamoDB tables for each US State (Tenant) dynamically.
+![alt text](screenshots/terraform-outputs.png)
+
+
+
+This is a comprehensive, honest, and professional README.md. It reflects the actual work you did (Terraform Modules, EKS, Ingress, CI/CD with CodePipeline) without overclaiming features you didn't implement (like KMS or complex secrets management).
+Instructions:
+Create a file named README.md in your root folder.
+Copy the text below.
+Crucial: Wherever you see ![...](...), replace the path inside the (...) with the actual path to your screenshot images.
+HumanGov: SaaS Application Infrastructure on AWS EKS
+![alt text](https://img.shields.io/badge/AWS-Cloud-orange?logo=amazon-aws&style=for-the-badge)
+
+![alt text](https://img.shields.io/badge/Terraform-IaC-purple?logo=terraform&style=for-the-badge)
+
+![alt text](https://img.shields.io/badge/Kubernetes-EKS-blue?logo=kubernetes&style=for-the-badge)
+
+![alt text](https://img.shields.io/badge/Docker-Containers-2496ED?logo=docker&style=for-the-badge)
+
+![alt text](https://img.shields.io/badge/CI%2FCD-AWS_CodePipeline-green?logo=amazonaws&style=for-the-badge)
+📖 Executive Summary
+HumanGov is a Software-as-a-Service (SaaS) Human Resources application built for government agencies.
+This project documents the end-to-end implementation of a cloud-native infrastructure on AWS. Moving away from manual provisioning, I architected a modular solution using Terraform to provision the networking and compute layers, and Amazon EKS (Kubernetes) to orchestrate the microservices.
+The project features a fully automated CI/CD pipeline using AWS CodePipeline and CodeBuild, ensuring that code committed to GitHub is automatically containerized, tested, and deployed to the cluster with zero manual intervention.
+🏗️ Architecture Design
+The infrastructure is designed for high availability and scalability, leveraging AWS managed services to reduce operational overhead.
+High-Level Architecture Diagram
+![alt text](./humangov_aws_architecture_(us-east-1).png)
+
+(Place your generated Python diagram here)
 Key Architectural Components
 Network Layer:
 A custom VPC (Virtual Private Cloud) with Public and Private Subnets across multiple Availability Zones for high availability.
@@ -60,20 +122,12 @@ Phase 2: Kubernetes Configuration & Ingress
 Instead of manual installation, I used the Terraform Helm Provider to install the controller directly into the cluster. This required setting up specific IAM Roles associated with the cluster's OIDC provider.
 2. Ingress & Routing:
 Deployed a Kubernetes Ingress resource to manage external access. This automatically triggered the creation of an AWS Application Load Balancer.
-code
-Yaml
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: humangov-python-app-ingress
-  annotations:
-    alb.ingress.kubernetes.io/scheme: internet-facing
-    # ...
+
 3. DNS Mapping:
 Mapped the Route 53 domain humangovv.click to the ALB DNS name using CNAME records.
 ![alt text](screenshots/ingress-route53.png)
 
-[Screenshot showing kubectl get ingress with the ALB address or Route 53 console]
+
 Phase 3: The CI/CD Pipeline
 To achieve continuous delivery, I built a pipeline that connects GitHub to EKS.
 1. The Build Process (CodeBuild):
@@ -87,8 +141,8 @@ Authenticates with the EKS cluster using a specific IAM Role mapped in the aws-a
 Executes kubectl apply to roll out updates without downtime.
 ![alt text](screenshots/pipeline-success.png)
 
-[Screenshot of AWS CodePipeline showing all stages Green]
-📸 Project Verification
+
+Project Verification
 1. Application Running Live
 The application is accessible via the public domain with HTTPS support.
 ![alt text](screenshots/app-running.png)
@@ -104,16 +158,15 @@ Validation of the container images stored in the private registry.
 ![alt text](screenshots/ecr-repo.png)
 
 [Screenshot of the AWS ECR console showing image tags]
-🏆 Challenges & Solutions
+
+
+Challenges & Solutions
 During the development, I encountered several complex challenges:
-Challenge: Helm Provider "Chicken and Egg" Error. Terraform tried to install the Load Balancer Controller before the EKS cluster endpoint was available.
-Solution: I refactored the main.tf to use specific data source dependencies and utilized a layered terraform apply approach to ensure the cluster was Active before Helm attempted connection.
+
 Challenge: CI/CD "Unauthorized" Access to EKS. CodeBuild failed to deploy because it didn't have permission to talk to the cluster.
 Solution: I updated the EKS Access Entries (access_entries) in Terraform to explicitly map the CodeBuild IAM Role to the system:masters group in Kubernetes.
-Challenge: Application Connectivity. The Python app initially crashed with AccessDenied errors when reaching DynamoDB.
-Solution: I implemented IAM Roles for Service Accounts (IRSA). I created a Kubernetes Service Account annotated with the ARN of an IAM role that had specific S3 and DynamoDB permissions, linking the two worlds securely.
-👤 Author
+
+
 Simeon Akinnuoye
 Cloud Infrastructure & DevOps Engineer
-LinkedIn Profile
-GitHub Repository
+www.linkedin.com/in/simeon-akinnuoye-9ab160183
