@@ -78,11 +78,16 @@ High-Level Architecture Diagram
 (Place your generated Python diagram here)
 Key Architectural Components
 Network Layer:
+
 A custom VPC (Virtual Private Cloud) with Public and Private Subnets across multiple Availability Zones for high availability.
+
 NAT Gateway configuration to allow secure internet access for private resources.
+
 Compute Layer (EKS):
 Amazon EKS Cluster (Control Plane) managing the container orchestration.
 Managed Node Groups (EC2 t3.medium) running the application workloads.
+
+
 Traffic Management:
 AWS Load Balancer Controller installed via Helm.
 Application Load Balancer (ALB) provisioned automatically via Kubernetes Ingress to route traffic based on host headers (e.g., california.humangovv.click).
@@ -97,29 +102,46 @@ Amazon ECR for storing container images.
 🛠️ Technologies Used
 Infrastructure as Code: Terraform (Modules, State Locking with DynamoDB, Remote State in S3).
 Containerization: Docker, Dockerfile.
+
 Orchestration: Kubernetes (EKS), Helm, Kubectl.
+
 Identity & Security: AWS IAM Roles for Service Accounts (IRSA), OIDC Provider.
+
 Automation: AWS CodePipeline, AWS CodeBuild.
+
 Application: Python (Flask), Gunicorn, Nginx.
+
+
 🚀 Implementation Guide (Step-by-Step)
+
 Phase 1: Infrastructure Provisioning (Terraform)
+
 I utilized a modular Terraform approach to maintain clean code and separation of concerns.
+
 1. Remote State Management:
 Configured an S3 bucket for storing the Terraform state file and a DynamoDB table for state locking to prevent concurrent modification errors.
+
 2. Networking & EKS:
 Provisioned the VPC and EKS cluster. I used a layered deployment strategy (-target) to ensure the network foundation was solid before deploying the cluster.
 code
 Bash
 # Example of the layered deployment used to avoid dependency clashes
 terraform apply -target="module.network" -target="module.eks"
+
 3. Application Resources:
 Automated the creation of S3 buckets and DynamoDB tables for each US State (Tenant) dynamically.
+
+
 ![alt text](screenshots/terraform-outputs.png)
 
 [Screenshot of your terminal showing terraform outputs like bucket names and ECR URL]
+
+
 Phase 2: Kubernetes Configuration & Ingress
+
 1. AWS Load Balancer Controller:
 Instead of manual installation, I used the Terraform Helm Provider to install the controller directly into the cluster. This required setting up specific IAM Roles associated with the cluster's OIDC provider.
+
 2. Ingress & Routing:
 Deployed a Kubernetes Ingress resource to manage external access. This automatically triggered the creation of an AWS Application Load Balancer.
 
@@ -130,15 +152,20 @@ Mapped the Route 53 domain humangovv.click to the ALB DNS name using CNAME recor
 
 Phase 3: The CI/CD Pipeline
 To achieve continuous delivery, I built a pipeline that connects GitHub to EKS.
+
 1. The Build Process (CodeBuild):
 Logs into the private Amazon ECR repository.
 Builds the Docker image from the source code.
 Tags the image with the unique Git Commit Hash for version control.
 Pushes the image to ECR.
+
 2. The Deployment Process:
 Updates the Kubernetes Manifests dynamically to use the new image tag.
+
 Authenticates with the EKS cluster using a specific IAM Role mapped in the aws-auth ConfigMap (Access Entries).
+
 Executes kubectl apply to roll out updates without downtime.
+
 ![alt text](screenshots/pipeline-success.png)
 
 
@@ -164,6 +191,7 @@ Challenges & Solutions
 During the development, I encountered several complex challenges:
 
 Challenge: CI/CD "Unauthorized" Access to EKS. CodeBuild failed to deploy because it didn't have permission to talk to the cluster.
+
 Solution: I updated the EKS Access Entries (access_entries) in Terraform to explicitly map the CodeBuild IAM Role to the system:masters group in Kubernetes.
 
 
