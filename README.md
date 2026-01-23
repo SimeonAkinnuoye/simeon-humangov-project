@@ -1,3 +1,6 @@
+![AWS Architecture Diagram](images/architecture.png)
+
+
 
 HumanGov is a secure, multi-tenant Software-as-a-Service (SaaS) Human Resources application designed for government agencies.
 
