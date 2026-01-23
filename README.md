@@ -14,111 +14,106 @@ The solution emphasizes **security, scalability, and automation**, moving away f
 
 The architecture follows the **AWS Well-Architected Framework**, prioritizing security and operational excellence.
 
-![Architecture Diagram](humangov_aws_architecture_(us-east-1).png)
-*(Generated programmatically using Python Diagrams)*
-
-    Key Components
-    **Networking:** A custom VPC with strict Public/Private subnet isolation.
-*   **Compute:** Amazon EKS cluster with worker nodes isolated in private subnets.
-*   **Traffic Management:** AWS Application Load Balancer (ALB) managed via the Kubernetes Ingress Controller.
-*   **Edge Security:** AWS WAF (Web Application Firewall) attached to the ALB to block SQL injection and common exploits.
-*   **Data Persistence:** Amazon DynamoDB (State Storage) and S3 (File Storage).
-*   **CI/CD:** A fully automated pipeline using AWS CodePipeline and CodeBuild.
-
----
-
-## 🔐 "Gold Standard" Security Implementation
-
-This project implements a **Zero-Trust** security model, suitable for sensitive government data.
-
-### 1. Network Isolation
-*   **Private Nodes:** EKS Worker nodes reside in **Private Subnets** with NO Public IP addresses. They communicate with the internet solely via a NAT Gateway.
-*   **Ingress Routing:** Application traffic is routed strictly through the ALB Ingress, with no direct access to pods allowed.
-
-### 2. Identity & Access Management (IRSA)
-*   **No Access Keys:** The application does *not* use hardcoded AWS Access Keys.
-*   **OIDC Federation:** Kubernetes Service Accounts are mapped to AWS IAM Roles using OpenID Connect (OIDC).
-*   **Least Privilege:** The application pod is granted permissions *only* to its specific S3 bucket and DynamoDB table via IAM policies.
-
-### 3. Encryption & Secret Management
-*   **KMS Envelope Encryption:** The Kubernetes `etcd` database secrets are encrypted at rest using AWS KMS.
-*   **Secrets Store CSI Driver:** Sensitive credentials (like DB passwords) are mounted directly from AWS Secrets Manager into pods as volumes, bypassing environment variables.
-
----
-
-## 🚀 CI/CD Pipeline Workflow
-
-The project features a **Continuous Delivery** pipeline provisioned entirely via Terraform (`modules/cicd`).
-
-1.  **Source:** AWS CodeStar connection watches the **GitHub Repository** for changes.
-2.  **Build:** AWS CodeBuild:
-    *   Authenticates with the Private **ECR Repository**.
-    *   Builds the Docker Image.
-    *   Tags the image with the **Git Commit Hash** (Immutable Versioning).
-    *   Pushes the image to ECR.
-3.  **Deploy:** CodeBuild authenticates with the private EKS cluster (via IAM RBAC mapping) and updates the Kubernetes workloads using `kubectl`.
-
-![CI/CD Pipeline](screenshots/pipeline-success.png)
-
----
-
-## 📂 Repository Structure
-
-The project follows a modular Terraform structure for maintainability.
-
-```bash
-human-gov-project/
-├── buildspec.yml                   # CI/CD instructions
-├── human-gov-application/          # Application Source Code
-│   └── src/
-│       ├── Dockerfile              # Container definition
-│       └── humangov-california.yaml # Kubernetes Manifests
-│
-└── human-gov-infrastructure/       # Infrastructure as Code
-    └── terraform/
-        ├── main.tf                 # Root Manager
-        └── modules/
-            ├── network/            # VPC, Subnets, NAT Gateway
-            ├── eks/                # Cluster, Node Groups, OIDC, IRSA, Add-ons
-            ├── cicd/               # CodePipeline, CodeBuild, IAM Roles
-            └── application/        # S3 Buckets, DynamoDB Tables
-📸 Deployment Evidence
-1. Application Running on EKS
-Live application accessible via Route 53 domain (humangovv.click) with secure HTTPS.
-![alt text](screenshots/app-running.png)
-2. Secure Private Nodes
-Proof that worker nodes have no Public IP addresses (Security Best Practice).
-![alt text](screenshots/private-nodes.png)
-3. Ingress Controller & ALB
-The AWS Load Balancer Controller dynamically provisioning the ALB based on Ingress YAML.
-![alt text](screenshots/alb-console.png)
-4. ECR Artifact Versioning
-Docker images tagged with Git Commit hashes for traceability.
-![alt text](screenshots/ecr-repo.png)
-💻 How to Deploy
-Prerequisites
-Terraform installed (v1.5+).
-AWS CLI configured.
-kubectl installed.
-Step 1: Provision Infrastructure
-We use a layered approach to prevent dependency conflicts.
+Key Architectural Components
+Network Layer:
+A custom VPC (Virtual Private Cloud) with Public and Private Subnets across multiple Availability Zones for high availability.
+NAT Gateway configuration to allow secure internet access for private resources.
+Compute Layer (EKS):
+Amazon EKS Cluster (Control Plane) managing the container orchestration.
+Managed Node Groups (EC2 t3.medium) running the application workloads.
+Traffic Management:
+AWS Load Balancer Controller installed via Helm.
+Application Load Balancer (ALB) provisioned automatically via Kubernetes Ingress to route traffic based on host headers (e.g., california.humangovv.click).
+Route 53 for DNS management.
+Storage & State:
+DynamoDB tables for application state management (per tenant).
+S3 Buckets for file storage (per tenant).
+CI/CD:
+AWS CodePipeline linked to GitHub.
+AWS CodeBuild for building Docker images and executing Kubernetes deployments.
+Amazon ECR for storing container images.
+🛠️ Technologies Used
+Infrastructure as Code: Terraform (Modules, State Locking with DynamoDB, Remote State in S3).
+Containerization: Docker, Dockerfile.
+Orchestration: Kubernetes (EKS), Helm, Kubectl.
+Identity & Security: AWS IAM Roles for Service Accounts (IRSA), OIDC Provider.
+Automation: AWS CodePipeline, AWS CodeBuild.
+Application: Python (Flask), Gunicorn, Nginx.
+🚀 Implementation Guide (Step-by-Step)
+Phase 1: Infrastructure Provisioning (Terraform)
+I utilized a modular Terraform approach to maintain clean code and separation of concerns.
+1. Remote State Management:
+Configured an S3 bucket for storing the Terraform state file and a DynamoDB table for state locking to prevent concurrent modification errors.
+2. Networking & EKS:
+Provisioned the VPC and EKS cluster. I used a layered deployment strategy (-target) to ensure the network foundation was solid before deploying the cluster.
 code
-Powershell
-cd human-gov-infrastructure/terraform
-terraform init
-
-# Phase 1: Build Network & Cluster Foundation
+Bash
+# Example of the layered deployment used to avoid dependency clashes
 terraform apply -target="module.network" -target="module.eks"
+3. Application Resources:
+Automated the creation of S3 buckets and DynamoDB tables for each US State (Tenant) dynamically.
+![alt text](screenshots/terraform-outputs.png)
 
-# Phase 2: Deploy Services, Databases, and CI/CD
-terraform apply
-Step 2: Configure DNS
-Get the ALB Address: kubectl get ingress
-Update Route 53 CNAME records to point to the ALB address.
-Step 3: Trigger Deployment
-Push a change to the GitHub repository. The pipeline will automatically build the Docker image and deploy the application to the cluster.
+[Screenshot of your terminal showing terraform outputs like bucket names and ECR URL]
+Phase 2: Kubernetes Configuration & Ingress
+1. AWS Load Balancer Controller:
+Instead of manual installation, I used the Terraform Helm Provider to install the controller directly into the cluster. This required setting up specific IAM Roles associated with the cluster's OIDC provider.
+2. Ingress & Routing:
+Deployed a Kubernetes Ingress resource to manage external access. This automatically triggered the creation of an AWS Application Load Balancer.
 code
-Powershell
-git add .
-git commit -m "Trigger deployment"
-git push
+Yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: humangov-python-app-ingress
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    # ...
+3. DNS Mapping:
+Mapped the Route 53 domain humangovv.click to the ALB DNS name using CNAME records.
+![alt text](screenshots/ingress-route53.png)
+
+[Screenshot showing kubectl get ingress with the ALB address or Route 53 console]
+Phase 3: The CI/CD Pipeline
+To achieve continuous delivery, I built a pipeline that connects GitHub to EKS.
+1. The Build Process (CodeBuild):
+Logs into the private Amazon ECR repository.
+Builds the Docker image from the source code.
+Tags the image with the unique Git Commit Hash for version control.
+Pushes the image to ECR.
+2. The Deployment Process:
+Updates the Kubernetes Manifests dynamically to use the new image tag.
+Authenticates with the EKS cluster using a specific IAM Role mapped in the aws-auth ConfigMap (Access Entries).
+Executes kubectl apply to roll out updates without downtime.
+![alt text](screenshots/pipeline-success.png)
+
+[Screenshot of AWS CodePipeline showing all stages Green]
+📸 Project Verification
+1. Application Running Live
+The application is accessible via the public domain with HTTPS support.
+![alt text](screenshots/app-running.png)
+
+[Screenshot of the HumanGov browser window with the lock icon]
+2. Kubernetes Workloads
+Verification that Pods, Services, and the Load Balancer Controller are running in the default and kube-system namespaces.
+![alt text](screenshots/kubectl-get-nodes.png)
+
+[Screenshot of your VS Code terminal showing kubectl get pods]
+3. ECR Repository
+Validation of the container images stored in the private registry.
+![alt text](screenshots/ecr-repo.png)
+
+[Screenshot of the AWS ECR console showing image tags]
+🏆 Challenges & Solutions
+During the development, I encountered several complex challenges:
+Challenge: Helm Provider "Chicken and Egg" Error. Terraform tried to install the Load Balancer Controller before the EKS cluster endpoint was available.
+Solution: I refactored the main.tf to use specific data source dependencies and utilized a layered terraform apply approach to ensure the cluster was Active before Helm attempted connection.
+Challenge: CI/CD "Unauthorized" Access to EKS. CodeBuild failed to deploy because it didn't have permission to talk to the cluster.
+Solution: I updated the EKS Access Entries (access_entries) in Terraform to explicitly map the CodeBuild IAM Role to the system:masters group in Kubernetes.
+Challenge: Application Connectivity. The Python app initially crashed with AccessDenied errors when reaching DynamoDB.
+Solution: I implemented IAM Roles for Service Accounts (IRSA). I created a Kubernetes Service Account annotated with the ARN of an IAM role that had specific S3 and DynamoDB permissions, linking the two worlds securely.
+👤 Author
+Simeon Akinnuoye
+Cloud Infrastructure & DevOps Engineer
+LinkedIn Profile
+GitHub Repository
